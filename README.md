@@ -27,8 +27,10 @@ Sistema d'administració complet per a la plataforma educativa Adeptify.es amb i
 1. **Clonar el repositori**
 ```bash
 git clone https://github.com/benetandujar72/n8n.git
-cd n8n/adeptify-admin-app
+cd n8n
 ```
+
+> **Nota**: El projecte està ara al directori arrel del repositori, no en un subdirectori.
 
 2. **Instal·lar dependències**
 ```bash
