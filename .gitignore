@@ -115,6 +115,10 @@ Desktop.ini
 
 # Prisma
 prisma/migrations/
+prisma/*.js
+prisma/*.js.map
+prisma/*.d.ts
+prisma/*.d.ts.map
 
 # Docker
 .dockerignore

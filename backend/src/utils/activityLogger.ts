@@ -54,14 +54,15 @@ export async function createActivityLog(data: ActivityLogData): Promise<void> {
   try {
     await prisma.activityLog.create({
       data: {
-        action: data.accio,
-        table: data.taula,
-        recordId: data.registreId,
+        accio: data.accio,
+        taula: data.taula,
+        registreId: data.registreId,
         userId: data.userId,
         ipAddress: data.ipAddress,
         userAgent: data.userAgent,
-        details: data.dadesNoves,
-        timestamp: new Date(),
+        dadesNoves: data.dadesNoves ? JSON.stringify(data.dadesNoves) : null,
+        dadesAnteriors: data.dadesAnteriors ? JSON.stringify(data.dadesAnteriors) : null,
+        createdAt: new Date(),
       },
     });
   } catch (error) {
@@ -96,7 +97,7 @@ export async function getActivityLogs(
       },
     },
     orderBy: {
-      timestamp: 'desc',
+      createdAt: 'desc',
     },
     take: limit,
     skip: offset,

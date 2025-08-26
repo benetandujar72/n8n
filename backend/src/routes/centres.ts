@@ -116,7 +116,8 @@ router.post('/', requireSuperAdmin, [
 ], asyncHandler(async (req: Request, res: Response) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    throw createError(errors.array()[0].msg, 400);
+    const firstError = errors.array()[0];
+    throw createError(firstError?.msg || 'Error de validació', 400);
   }
 
   const { nom, codi, emailDomain } = req.body;
@@ -174,7 +175,8 @@ router.put('/:id', requireSuperAdmin, validateId, [
 ], asyncHandler(async (req: Request, res: Response) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    throw createError(errors.array()[0].msg, 400);
+    const firstError = errors.array()[0];
+    throw createError(firstError?.msg || 'Error de validació', 400);
   }
 
   const { id } = req.params;
