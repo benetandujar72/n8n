@@ -1,0 +1,162 @@
+version: '3.8'
+
+services:
+  # Base de dades PostgreSQL per l'aplicació d'administració
+  admin-db:
+    image: postgres:15-alpine
+    container_name: adeptify-admin-db
+    environment:
+      POSTGRES_DB: adeptify_admin
+      POSTGRES_USER: adeptify_admin
+      POSTGRES_PASSWORD: ${ADMIN_DB_PASSWORD:-admin_password_2024}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - admin_db_data:/var/lib/postgresql/data
+      - ./scripts/init-admin-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5433:5432"
+    networks:
+      - adeptify-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U adeptify_admin -d adeptify_admin" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: adeptify-admin-backend
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://adeptify_admin:${ADMIN_DB_PASSWORD:-admin_password_2024}@admin-db:5432/adeptify_admin
+      N8N_DATABASE_URL: ${N8N_DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-2024}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-your-super-secret-refresh-key-2024}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      N8N_BASE_URL: ${N8N_BASE_URL:-http://n8n:5678}
+      N8N_API_KEY: ${N8N_API_KEY}
+      PORT: 3001
+    volumes:
+      - ../backend/uploads:/app/uploads
+      - ../backend/logs:/app/logs
+    ports:
+      - "3001:3001"
+    networks:
+      - adeptify-network
+    depends_on:
+      admin-db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:3001/api/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Frontend React
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: adeptify-admin-frontend
+    environment:
+      REACT_APP_API_URL: http://localhost:3001/api
+      REACT_APP_WS_URL: ws://localhost:3001
+      REACT_APP_VERSION: 1.0.0
+    ports:
+      - "2705:80"
+    networks:
+      - adeptify-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:80" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis per sessions i cache
+  redis:
+    image: redis:7-alpine
+    container_name: adeptify-admin-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_password_2024}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6380:6379"
+    networks:
+      - adeptify-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: adeptify-admin-nginx
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+      - ./nginx/sites-enabled:/etc/nginx/sites-enabled
+      - ./nginx/ssl:/etc/nginx/ssl
+    ports:
+      - "2705:80"
+      - "2743:443"
+    networks:
+      - adeptify-network
+    depends_on:
+      - frontend
+      - backend
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:80/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backup automàtic
+  backup:
+    image: postgres:15-alpine
+    container_name: adeptify-admin-backup
+    environment:
+      PGPASSWORD: ${ADMIN_DB_PASSWORD:-admin_password_2024}
+    volumes:
+      - ../backups:/backups
+      - ./scripts/backup.sh:/backup.sh
+    networks:
+      - adeptify-network
+    depends_on:
+      - admin-db
+    restart: "no"
+    command: >
+      sh -c "
+        echo 'Configurant backup automàtic...' &&
+        chmod +x /backup.sh &&
+        /backup.sh
+      "
+
+volumes:
+  admin_db_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  adeptify-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

@@ -1,0 +1,140 @@
+version: '3.8'
+
+services:
+  # Base de dades PostgreSQL per desenvolupament
+  admin-db-dev:
+    image: postgres:15-alpine
+    container_name: adeptify-admin-db-dev
+    environment:
+      POSTGRES_DB: adeptify_admin_dev
+      POSTGRES_USER: adeptify_admin
+      POSTGRES_PASSWORD: admin_dev_password_2024
+      POSTGRES_INITDB_ARGS: "--encoding=UTF-8 --lc-collate=C --lc-ctype=C"
+    volumes:
+      - admin_db_dev_data:/var/lib/postgresql/data
+      - ./scripts/init-admin-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5434:5432"
+    networks:
+      - adeptify-dev-network
+    restart: unless-stopped
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U adeptify_admin -d adeptify_admin_dev" ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Backend API per desenvolupament
+  backend-dev:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile.dev
+    container_name: adeptify-admin-backend-dev
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: postgresql://adeptify_admin:admin_dev_password_2024@admin-db-dev:5432/adeptify_admin_dev
+      N8N_DATABASE_URL: postgresql://n8n:n8n_password@n8n-db:5432/n8n
+      JWT_SECRET: dev-jwt-secret-key-2024
+      JWT_REFRESH_SECRET: dev-refresh-secret-key-2024
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORT: ${SMTP_PORT}
+      SMTP_USER: ${SMTP_USER}
+      SMTP_PASS: ${SMTP_PASS}
+      N8N_BASE_URL: http://n8n:5678
+      N8N_API_KEY: ${N8N_API_KEY}
+      PORT: 3001
+    volumes:
+      - ../backend:/app
+      - /app/node_modules
+      - ../backend/uploads:/app/uploads
+      - ../backend/logs:/app/logs
+    ports:
+      - "3001:3001"
+    networks:
+      - adeptify-dev-network
+    depends_on:
+      admin-db-dev:
+        condition: service_healthy
+    restart: unless-stopped
+    command: npm run dev
+
+  # Frontend React per desenvolupament
+  frontend-dev:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile.dev
+    container_name: adeptify-admin-frontend-dev
+    environment:
+      REACT_APP_API_URL: http://localhost:3001/api
+      REACT_APP_WS_URL: ws://localhost:3001
+      REACT_APP_VERSION: 1.0.0-dev
+      CHOKIDAR_USEPOLLING: "true"
+    volumes:
+      - ../frontend:/app
+      - /app/node_modules
+    ports:
+      - "2705:3000"
+    networks:
+      - adeptify-dev-network
+    depends_on:
+      - backend-dev
+    restart: unless-stopped
+    command: npm start
+
+  # Redis per desenvolupament
+  redis-dev:
+    image: redis:7-alpine
+    container_name: adeptify-admin-redis-dev
+    command: redis-server --appendonly yes --requirepass redis_dev_password_2024
+    volumes:
+      - redis_dev_data:/data
+    ports:
+      - "6381:6379"
+    networks:
+      - adeptify-dev-network
+    restart: unless-stopped
+
+  # MailHog per testing d'emails
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: adeptify-admin-mailhog
+    ports:
+      - "1025:1025" # SMTP
+      - "8025:8025" # Web UI
+    networks:
+      - adeptify-dev-network
+    restart: unless-stopped
+
+  # pgAdmin per gestionar la base de dades
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: adeptify-admin-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@adeptify.es
+      PGADMIN_DEFAULT_PASSWORD: pgadmin_password_2024
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    ports:
+      - "5050:80"
+    networks:
+      - adeptify-dev-network
+    restart: unless-stopped
+
+volumes:
+  admin_db_dev_data:
+    driver: local
+  redis_dev_data:
+    driver: local
+  pgadmin_data:
+    driver: local
+
+networks:
+  adeptify-dev-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16

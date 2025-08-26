@@ -1,0 +1,310 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+// Enums (using strings for SQLite compatibility)
+
+// Models
+model User {
+  id                String      @id @default(cuid())
+  email             String      @unique
+  password          String
+  firstName         String
+  lastName          String
+  role              String
+  status            String      @default("ACTIVE")
+  emailVerified     Boolean     @default(false)
+  lastLogin         DateTime?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  // Relacions
+  centre            Centre?     @relation(fields: [centreId], references: [id])
+  centreId          String?
+  curs              Curs?       @relation(fields: [cursId], references: [id])
+  cursId            String?
+
+  // Audit trail
+  createdBy         String?
+  updatedBy         String?
+
+  // Sessions
+  sessions          Session[]
+
+  // Notificacions
+  notifications     Notification[]
+
+  // Logs
+  activityLogs      ActivityLog[]
+
+  @@map("users")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  userId       String
+  token        String   @unique
+  refreshToken String   @unique
+  expiresAt    DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Centre {
+  id              String        @id @default(cuid())
+  nom             String
+  codi            String        @unique
+  emailDomain     String        @unique
+  adreca          String?
+  telefon         String?
+  status          String        @default("ACTIVE")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Configuracions
+  configuracions  Configuracio[]
+
+  // Relacions
+  users           User[]
+  cursos          Curs[]
+  alumnes         Alumne[]
+
+  // Integracions
+  integracions    Integracio[]
+
+  // Logs
+  activityLogs    ActivityLog[]
+
+  @@map("centres")
+}
+
+model Curs {
+  id              String      @id @default(cuid())
+  nom             String
+  codi            String      @unique
+  anyAcademic     Int
+  status          String      @default("ACTIVE")
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relacions
+  centre          Centre      @relation(fields: [centreId], references: [id])
+  centreId        String
+  users           User[]
+  assignatures    Assignatura[]
+  alumnes         Alumne[]
+
+  // Configuracions
+  configuracions  Configuracio[]
+
+  // Logs
+  activityLogs    ActivityLog[]
+
+  @@map("cursos")
+}
+
+model Assignatura {
+  id              String      @id @default(cuid())
+  nom             String
+  codi            String
+  credits         Int?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relacions
+  curs            Curs        @relation(fields: [cursId], references: [id])
+  cursId          String
+  professors      Professor[]
+  rubriques       Rubrica[]
+
+  // Logs
+  activityLogs    ActivityLog[]
+
+  @@map("assignatures")
+}
+
+model Professor {
+  id              String      @id @default(cuid())
+  email           String      @unique
+  nom             String
+  cognoms         String
+  especialitat    String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relacions
+  assignatures    Assignatura[]
+
+  // Logs
+  activityLogs    ActivityLog[]
+
+  @@map("professors")
+}
+
+model Alumne {
+  id              String      @id @default(cuid())
+  email           String      @unique
+  nom             String
+  cognoms         String
+  dni             String?     @unique
+  dataNaixement   DateTime?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relacions
+  centre          Centre      @relation(fields: [centreId], references: [id])
+  centreId        String
+  curs            Curs        @relation(fields: [cursId], references: [id])
+  cursId          String
+
+  // Avaluacions
+  avaluacions     Avaluacio[]
+
+  // Logs
+  activityLogs    ActivityLog[]
+
+  @@map("alumnes")
+}
+
+model Rubrica {
+  id              String      @id @default(cuid())
+  nom             String
+  descripcio      String?
+  criteris        String      // Array de criteris amb pesos (JSON string)
+  puntuacioMaxima Int         @default(10)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relacions
+  assignatura     Assignatura @relation(fields: [assignaturaId], references: [id])
+  assignaturaId   String
+  avaluacions     Avaluacio[]
+
+  // Logs
+  activityLogs    ActivityLog[]
+
+  @@map("rubriques")
+}
+
+model Avaluacio {
+  id              String          @id @default(cuid())
+  titol           String
+  descripcio      String?
+  status          String          @default("PENDING")
+  puntuacio       Float?
+  feedback        String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  // Relacions
+  alumne          Alumne          @relation(fields: [alumneId], references: [id])
+  alumneId        String
+  rubrica         Rubrica         @relation(fields: [rubricaId], references: [id])
+  rubricaId       String
+
+  // Logs
+  activityLogs    ActivityLog[]
+
+  @@map("avaluacions")
+}
+
+model Configuracio {
+  id              String      @id @default(cuid())
+  clau            String
+  valor           String
+  descripcio      String?
+  encriptat       Boolean     @default(false)
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  // Relacions (opcionals)
+  centre          Centre?     @relation(fields: [centreId], references: [id])
+  centreId        String?
+  curs            Curs?       @relation(fields: [cursId], references: [id])
+  cursId          String?
+
+  @@map("configuracions")
+}
+
+model Integracio {
+  id              String            @id @default(cuid())
+  tipus           String
+  nom             String
+  config          String            // Configuració encriptada (JSON string)
+  activa          Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relacions
+  centre          Centre            @relation(fields: [centreId], references: [id])
+  centreId        String
+
+  // Logs
+  activityLogs    ActivityLog[]
+
+  @@map("integracions")
+}
+
+model Notification {
+  id              String            @id @default(cuid())
+  titol           String
+  missatge        String
+  tipus           String
+  llegida         Boolean           @default(false)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  // Relacions
+  user            User              @relation(fields: [userId], references: [id])
+  userId          String
+
+  @@map("notifications")
+}
+
+model ActivityLog {
+  id              String      @id @default(cuid())
+  accio           String
+  taula           String
+  registreId      String?
+  dadesAnteriors  String?
+  dadesNoves      String?
+  ipAddress       String?
+  userAgent       String?
+  createdAt       DateTime    @default(now())
+
+  // Relacions
+  user            User?       @relation(fields: [userId], references: [id])
+  userId          String?
+  centre          Centre?     @relation(fields: [centreId], references: [id])
+  centreId        String?
+  curs            Curs?       @relation(fields: [cursId], references: [id])
+  cursId          String?
+  assignatura     Assignatura? @relation(fields: [assignaturaId], references: [id])
+  assignaturaId   String?
+  professor       Professor?  @relation(fields: [professorId], references: [id])
+  professorId     String?
+  alumne          Alumne?     @relation(fields: [alumneId], references: [id])
+  alumneId        String?
+  rubrica         Rubrica?    @relation(fields: [rubricaId], references: [id])
+  rubricaId       String?
+  avaluacio       Avaluacio?  @relation(fields: [avaluacioId], references: [id])
+  avaluacioId     String?
+  integracio      Integracio? @relation(fields: [integracioId], references: [id])
+  integracioId    String?
+
+  @@map("activity_logs")
+}
+
+
